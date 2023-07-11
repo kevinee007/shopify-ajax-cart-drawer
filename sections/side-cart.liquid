@@ -1,0 +1,322 @@
+{{ 'component-side-cart.css' | asset_url | stylesheet_tag }}
+{{ 'component-side-cart-item.css' | asset_url | stylesheet_tag }}
+
+<script src="{{ 'side-cart.js' | asset_url }}" defer="defer"></script>
+
+{% assign country_name = localization.country %}
+{% assign freeShipping = settings.free_shipping_amount | plus: 0 %}
+{% if country_name == 'Canada' and settings.free_shipping_amount_ca != blank %}
+{% assign freeShipping = settings.free_shipping_amount_ca | plus: 0 %}
+{% endif %}
+{% assign upsell_1 = blank %}
+{% assign upsell_2 = blank %}
+
+{% liquid
+  for item in cart.items
+    if upsell_1 != blank and upsell_2 != blank
+      break
+    else
+      if item.product.tags contains "upsell product"
+        for tag in item.product.tags
+          if tag contains "upsell_"
+            assign upsell_handle = tag | split: "upsell_" | last
+            if upsell_1 == blank
+              assign upsell_1 = all_products[upsell_handle]
+            elsif upsell_2 == blank and upsell_handle != upsell_1.title
+              assign upsell_2 = all_products[upsell_handle]
+            endif
+          endif
+        endfor
+      endif
+    endif
+  endfor
+%}
+
+{% assign hideShipping = false %}
+{% liquid
+	for item in cart.items
+    if item.product_id == 7249102143687
+      assign hideShipping = true
+      break
+    endif
+  endfor
+%}
+
+{% liquid
+  assign giftCardPrices = ""
+  for item in cart.items
+    if item.gift_card == true
+      assign giftCardPrices = giftCardPrices | append: ',' | append: item.final_line_price
+    endif
+  endfor
+  assign giftCardPrices = giftCardPrices | remove_first: ',' | split: ','
+
+  assign totalGiftCardPrices = 0
+  for giftCardPrice in giftCardPrices
+    assign giftCardPrice = giftCardPrice | plus: 0
+    assign totalGiftCardPrices = totalGiftCardPrices | plus: giftCardPrice
+  endfor
+%}
+
+{% liquid
+  assign adventCalendardId = 7413146779847
+  assign adventCalendarPrices = ""
+  for item in cart.items
+    if item.product_id == adventCalendardId
+      assign adventCalendarPrices = adventCalendarPrices | append: ',' | append: item.final_line_price
+    endif
+  endfor
+  assign adventCalendarPrices = adventCalendarPrices | remove_first: ',' | split: ','
+
+  assign totalAdventCalendarPrices = 0
+  for adventCalendardPrice in adventCalendarPrices
+    assign adventCalendardPrice = adventCalendardPrice | plus: 0
+    assign totalAdventCalendarPrices = totalAdventCalendarPrices | plus: adventCalendardPrice
+  endfor
+%}
+
+<side-cart>
+  <div class="sidecart__overlay"></div>
+  <div class="sidecart__content">
+    <div class="sidecart__header">
+      <a id="closecart">{% render 'icon-close' %}</a>
+      <div class="sidecart__header-title">
+        Shopping Cart
+      </div>
+    </div>
+
+    <div class="sidecart__shipping" {% if hideShipping or section.settings.show_freeShipping == false or localization.market.handle == 'united-kingdom' %}style="display:none"{% endif %}>
+        <p class="shipping-msg">
+            {%- comment -%} {%- assign totalPriceConsideringShippingExceptions = cart.total_price | minus: totalGiftCardPrices | minus: totalAdventCalendarPrices -%} {%- endcomment -%}
+            {%- assign totalPriceConsideringShippingExceptions = cart.total_price | minus: totalGiftCardPrices -%}
+            {% if totalPriceConsideringShippingExceptions < freeShipping %}
+            {%- comment -%} You're <span class="shipping-threshold">{{ freeShipping | minus: cart.total_price | plus: totalGiftCardPrices | plus: totalAdventCalendarPrices | money }}</span> from free shipping! {%- endcomment -%}
+            You're <span class="shipping-threshold">{{ freeShipping | minus: cart.total_price | plus: totalGiftCardPrices | money }}</span> from free shipping!
+            {% else %}
+            You qualify for free shipping!
+            {% endif %}
+        </p>
+        <div class="shipping-meter">
+            {%- comment -%} {% assign bar_width = cart.total_price | minus: totalGiftCardPrices | minus: totalAdventCalendarPrices | times: 1.0 | divided_by: freeShipping | times: 100.0 | round: 0 | at_most: 100 %} {%- endcomment -%}
+            {% assign bar_width = cart.original_total_price | minus: totalGiftCardPrices | times: 1.0 | divided_by: freeShipping | times: 100.0 | round: 0 | at_most: 100 %}
+            <span class="meter-indicator" style="width: {{ bar_width }}%;"></span>
+        </div>
+        <div class="shipping-index">
+            <p>$0</p>
+            <p>${{ freeShipping | divided_by: 100 | round }}</p>
+        </div>
+    </div>
+
+    {% for block in section.blocks %}
+      {% liquid 
+        assign threshold = block.settings.threshold
+        assign thresholdType = block.settings.type
+      %}
+  
+      <div 
+        class="sidecart__promo" 
+        data-threshold="{{ threshold }}"
+        data-threshold-product-id="
+          {%- for product in block.settings.product_list -%}
+            {{- product.id -}}{%- unless forloop.last -%},{%- endunless -%}
+          {%- endfor -%}
+        "
+        data-threshold-type="{{ thresholdType }}"
+      >
+        <p class="promo-msg before">
+          {{ block.settings.promo_message_before }}
+        </p>
+  
+        <p class="promo-msg after">
+          {{ block.settings.promo_message_after | escape }}
+        </p>
+  
+        <div class="promo-meter">
+          <span class="meter-indicator"></span>
+        </div>
+  
+        <div class="promo-index">
+          <p>{% if thresholdType == 'money' %}${% endif -%}0</p>
+          <p>
+            {% if thresholdType == 'money' %}
+              ${{ threshold | divided_by: 100 | round }}
+            {% else %}
+              {{ threshold }}
+            {% endif %}
+          </p>
+        </div>
+  
+        <script type="application/json">
+          {
+            "promo_message_before": "{{ block.settings.promo_message_before }}",
+            "promo_message_after": "{{ block.settings.promo_message_after | escape }}",
+            "threshold":{{ threshold }}
+          }
+        </script>
+      </div>
+    {% endfor %}
+
+    <div class="sidecart__items">
+      {% if cart.item_count > 0 %}
+      <div class="sidecart__items-wrapper">
+        {% for item in cart.items %}
+          {% assign sellingPlan = item.selling_plan_allocation.selling_plan %}
+          <side-cart-item
+            data-variant-id="{{ item.variant_id }}"
+            data-line-index="{{ forloop.index }}"
+            {% unless item.properties == empty %}
+               {% for p in item.properties %}
+                  {% if p.first == 'bundle_id' %}
+                     data-bundle-id="{{p.last}}"
+                  {% endif %}
+               {% endfor %}
+            {% endunless %}
+          >
+            <div class="action-loading">
+              {% render 'icon-loading' %}
+            </div>
+            <div class="sidecart__img">
+              <img src="{{ item.product.featured_image | img_url: '200x' }}">
+            </div>
+            <div class="sidecart__info">
+              <div class="sidecart__info-titlesection">
+                <a class="item-title" href="{{ item.product.url }}">{{ item.product.title }}</a>
+                {% if item.variant.title != blank and item.variant.title != "Default Title" %}
+                  {%- if localization.country == 'Canada' and item.product.gift_card? -%}
+                    {%- assign converted_CAD = item.variant.title | remove_first: '$' | plus: 0 | times: 1.31 | round: 2 | prepend: '$' -%}
+                    <p class="item-variant-title">{{ converted_CAD }}</p>
+                  {%- else -%}
+                    <p class="item-variant-title">{{ item.variant.title }}</p>
+                  {%- endif -%}
+                {% endif %}
+              </div>
+              {% unless item.final_price == 0 and sellingPlan.recurring_deliveries == true %}
+                <div class="sidecart__info-pricing">
+                  <p class="item-price">{{ item.final_price | money }}</p>
+                </div>
+              {% endunless %}
+            </div>
+            <div class="sidecart__buttons {{item.discount_allocations.size}}">
+              {% unless item.final_price == 0 and sellingPlan.recurring_deliveries == true %}
+                  <a class="item-remove qty-controller" data-update-type="remove">Remove</a>
+              {% endunless %}
+              <div class="sidecart__qty-control">
+                <button class="btn item-qty-btn qty-controller" data-update-type="minus">−</button>
+                <input class="itemQty" id="itemQty" type="number" value="{{ item.quantity }}" disabled />
+                <button class="btn item-qty-btn qty-controller" data-update-type="plus"
+                  {%- if item.product_id == adventCalendardId and item.quantity >= 4 -%}disabled{%- endif -%}>+</button>
+              </div>
+            </div>
+            {% if item.discount_allocations != blank %}
+              <ul class="item-discounts">
+                {% for discount in item.discount_allocations %}
+                  <li>
+                    {% render 'icon-discount' %}
+                    <span class="discount-info">
+                      {{ discount.discount_application.title }}(-{{ discount.discount_application.total_allocated_amount | money }})
+                    </span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+            {% comment %} {%- if item.product_id == adventCalendardId -%}
+              <span class="limit-warning">Did you pre-order? If so, add to cart and use your redemption code at checkout.</span>
+            {%- endif -%} {% endcomment %}
+          </side-cart-item>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="sidecart__items-wrapper--upsell">
+      </div>
+    </div>
+    <div class="sidecart__footer">
+      {% if cart.item_count > 0 %}
+      <div class="sidecart__footer-wrapper">
+        <div class="footer__subtotal">
+          <p class="subtotal-label">Subtotal</p>
+          <p class="subtotal-price">{{ cart.total_price | money }}</p>
+        </div>
+        <div class="footer__disclaimer">
+          <p>
+            Taxes and <a href="/policies/shipping-policy">shipping</a> calculated at checkout
+          </p>
+        </div>
+        <div class="custom-checkout-container">
+          <a class="custom-checkout-btn" href="/checkout">CHECKOUT</a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="sidecart__empty">
+      {% if cart.item_count <= 0 %}
+      <div class="sidecart__empty-wrapper">
+        <p class="empty-msg">Your cart is currently empty.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</side-cart>
+
+{% schema %}
+{
+  "name": "Side Cart",
+  "blocks": [
+    {
+      "type": "promo_block",
+      "name": "Promo Block",
+      "settings": [
+        {
+          "type": "select",
+          "id": "type",
+          "label": "Promo Type",
+          "default": "money",
+          "options": [
+            {
+              "value": "money",
+              "label": "Minimum Cart Value"
+            },
+            {
+              "value": "product",
+              "label": "Specific Product in Cart"
+            }
+          ]
+        },
+        {
+          "type": "product_list",
+          "id": "product_list",
+          "label": "Products",
+          "limit": 12,
+          "info": "This field only applies if you selected 'Specific Product in Cart', above."
+        },
+        {
+          "type": "textarea",
+          "id": "promo_message_before",
+          "label": "Promo message when total price is lower than the condition",
+          "default": "You're <span class='promo-threshold'></span> from free shipping!"
+        },
+        {
+          "type": "textarea",
+          "id": "promo_message_after",
+          "label": "Promo message when total price is greater than the condition",
+          "default": "You qualify for the threshold"
+        },
+        {
+          "type": "number",
+          "id": "threshold",
+          "label": "Threshold",
+          "info": "This will be either a monetary value (in cents) or a quantity of products, depending on above selection."
+        }
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "show_freeShipping",
+      "label": "Show Free Shipping",
+      "default": true
+    }
+  ]
+}
+{% endschema %}
